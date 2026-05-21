@@ -10,7 +10,7 @@ Open german live TV channels in VLC from the terminal.
 ## Install
 
 ```bash
-go install github.com/mrclmr/tv@main
+go install github.com/mrclmr/tv@latest
 ```
 
 ## Usage
