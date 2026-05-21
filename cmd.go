@@ -17,7 +17,7 @@ func newRootCmd() *cobra.Command {
 		Use:          "tv [channel]",
 		Short:        "Open a live TV channel in VLC",
 		SilenceUsage: true,
-		Args: cobra.MaximumNArgs(1),
+		Args:         cobra.MaximumNArgs(1),
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 			if len(args) != 0 {
 				return nil, cobra.ShellCompDirectiveNoFileComp
@@ -32,7 +32,7 @@ func newRootCmd() *cobra.Command {
 			}
 			for alias, target := range aliases {
 				if _, found := channelToURL(target, channels); found {
-					names = append(names, alias)
+					names = append(names, alias+"\t-> "+target)
 				}
 			}
 			return names, cobra.ShellCompDirectiveNoFileComp
