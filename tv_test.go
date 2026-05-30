@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -101,6 +104,78 @@ func TestResolveAlias(t *testing.T) {
 				t.Errorf("resolveAlias(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestNormalAudioTrack(t *testing.T) {
+	tests := []struct {
+		name     string
+		manifest string
+		want     int
+	}{
+		{
+			name: "normal audio first",
+			manifest: `#EXTM3U
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",LANGUAGE="de",NAME="Deutsch",DEFAULT=YES,AUTOSELECT=YES,URI="audio1.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",LANGUAGE="de",NAME="Audiodeskription",CHARACTERISTICS="public.accessibility.describes-video",DEFAULT=NO,AUTOSELECT=YES,URI="audio2.m3u8"`,
+			want: 1,
+		},
+		{
+			name: "audio description first",
+			manifest: `#EXTM3U
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",LANGUAGE="de",NAME="Audiodeskription",CHARACTERISTICS="public.accessibility.describes-video",DEFAULT=YES,AUTOSELECT=YES,URI="audio1.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",LANGUAGE="de",NAME="Deutsch",DEFAULT=NO,AUTOSELECT=YES,URI="audio2.m3u8"`,
+			want: 2,
+		},
+		{
+			name: "normal audio amid multiple tracks",
+			manifest: `#EXTM3U
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",LANGUAGE="de",NAME="Audiodeskription",CHARACTERISTICS="public.accessibility.describes-video",DEFAULT=YES,URI="audio1.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",LANGUAGE="de",NAME="Klare Sprache",DEFAULT=NO,URI="audio2.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",LANGUAGE="de",NAME="Deutsch",DEFAULT=NO,URI="audio3.m3u8"`,
+			want: 2,
+		},
+		{
+			name: "only audio description track",
+			manifest: `#EXTM3U
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",LANGUAGE="de",NAME="Audiodeskription",CHARACTERISTICS="public.accessibility.describes-video",DEFAULT=YES,URI="audio1.m3u8"`,
+			want: 0,
+		},
+		{
+			name: "no audio tracks",
+			manifest: `#EXTM3U
+#EXT-X-STREAM-INF:BANDWIDTH=1000000
+stream.m3u8`,
+			want: 0,
+		},
+		{
+			name: "multiple groups only counts first group",
+			manifest: `#EXTM3U
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="group1",LANGUAGE="de",NAME="Deutsch",DEFAULT=YES,URI="g1audio1.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="group1",LANGUAGE="de",NAME="Audiodeskription",CHARACTERISTICS="public.accessibility.describes-video",DEFAULT=NO,URI="g1audio2.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="group2",LANGUAGE="de",NAME="Deutsch",DEFAULT=YES,URI="g2audio1.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="group2",LANGUAGE="de",NAME="Audiodeskription",CHARACTERISTICS="public.accessibility.describes-video",DEFAULT=NO,URI="g2audio2.m3u8"`,
+			want: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write([]byte(tt.manifest))
+			}))
+			defer srv.Close()
+			got := normalAudioTrack(context.Background(), srv.URL)
+			if got != tt.want {
+				t.Errorf("normalAudioTrack() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalAudioTrackUnreachable(t *testing.T) {
+	got := normalAudioTrack(context.Background(), "http://127.0.0.1:0/invalid.m3u8")
+	if got != 0 {
+		t.Errorf("normalAudioTrack() = %d, want 0 for unreachable URL", got)
 	}
 }
 

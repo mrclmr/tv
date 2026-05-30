@@ -107,6 +107,63 @@ func toChannels(results []result) []channel {
 	return channels
 }
 
+func hlsAttr(line, attr string) string {
+	key := attr + "="
+	idx := strings.Index(line, key)
+	if idx < 0 {
+		return ""
+	}
+	val := line[idx+len(key):]
+	if strings.HasPrefix(val, `"`) {
+		end := strings.Index(val[1:], `"`)
+		if end >= 0 {
+			return val[1 : end+1]
+		}
+	}
+	if end := strings.IndexAny(val, ",\r\n"); end >= 0 {
+		return val[:end]
+	}
+	return val
+}
+
+// normalAudioTrack returns the 1-based index of the first non-audio-description
+// audio rendition in the HLS master manifest, or 0 if it cannot be determined.
+func normalAudioTrack(ctx context.Context, manifestURL string) int {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, manifestURL, nil)
+	if err != nil {
+		return 0
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0
+	}
+	defer func() { _ = res.Body.Close() }()
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		return 0
+	}
+	firstGroup := ""
+	index := 0
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "#EXT-X-MEDIA:") || !strings.Contains(line, "TYPE=AUDIO") {
+			continue
+		}
+		group := hlsAttr(line, "GROUP-ID")
+		if firstGroup == "" {
+			firstGroup = group
+		}
+		if group != firstGroup {
+			continue
+		}
+		index++
+		if !strings.Contains(line, "describes-video") {
+			return index
+		}
+	}
+	return 0
+}
+
 func livestreamURLs(ctx context.Context) ([]channel, error) {
 	if results, ok := loadCache(); ok {
 		return toChannels(results), nil

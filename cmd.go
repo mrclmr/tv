@@ -62,7 +62,11 @@ func newRootCmd() *cobra.Command {
 			if !found {
 				return errors.New("channel " + args[0] + " not found")
 			}
-			c := exec.CommandContext(cmd.Context(), "vlc", u)
+			vlcArgs := []string{u}
+			if track := normalAudioTrack(cmd.Context(), u); track > 0 {
+				vlcArgs = append(vlcArgs, fmt.Sprintf("--audio-track=%d", track))
+			}
+			c := exec.CommandContext(cmd.Context(), "vlc", vlcArgs...)
 			c.Stdout = os.Stdout
 			c.Stderr = os.Stderr
 			return c.Run()
